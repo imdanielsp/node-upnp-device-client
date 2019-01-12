@@ -8,14 +8,14 @@ Install
 -------
 
 ```bash
-$ npm install upnp-device-client
+$ npm install @langovoi/upnp-device-client
 ```
 
 Usage
 -----
 
 ```javascript
-var Client = require('upnp-device-client');
+var Client = require('@langovoi/upnp-device-client');
 
 // Instanciate a client with a device description URL (discovered by SSDP)
 var client = new Client('http://192.168.1.50:4873/foo.xml');
