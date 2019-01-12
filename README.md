@@ -51,3 +51,11 @@ Run with debug traces
 ```bash
 $ DEBUG=* node index.js
 ```
+
+or you can pass your own logger
+
+```javascript
+var client = new Client('http://192.168.1.50:4873/foo.xml', {
+    customLogger: console.log
+})
+```

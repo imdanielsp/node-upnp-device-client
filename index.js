@@ -6,7 +6,7 @@ var parseUrl = require('url').parse;
 var os = require('os');
 var concat = require('concat-stream');
 var ip = require('ip');
-var debug = require('debug')('upnp-device-client');
+var debug = require('debug');
 var pkg = require('./package.json');
 
 var OS_VERSION = [os.platform(), os.release()].join('/');
@@ -15,8 +15,10 @@ var PACKAGE_VERSION = [pkg.name, pkg.version].join('/');
 var SUBSCRIPTION_TIMEOUT = 300;
 
 
-function DeviceClient(url) {
+function DeviceClient(url, options) {
   EventEmitter.call(this);
+
+  options = options || {};
 
   this.url = url;
   this.deviceDescription = null;
@@ -25,6 +27,7 @@ function DeviceClient(url) {
   this.listening = false;
   this.subscriptions = {};
   this.pendingUnsubscriptions = {};
+  this._logger = options.customLogger || debug('upnp-device-client')
 }
 
 util.inherits(DeviceClient, EventEmitter);
@@ -41,7 +44,7 @@ DeviceClient.prototype.getDeviceDescription = function(callback) {
     return;
   }
 
-  debug('fetch device description');
+  this._logger('fetch device description');
   fetch(this.url, function(err, body) {
     if(err) return callback(err);
     var desc = parseDeviceDescription(body, self.url);
@@ -71,7 +74,7 @@ DeviceClient.prototype.getServiceDescription = function(serviceId, callback) {
       return callback(null, self.serviceDescriptions[serviceId]);
     }
 
-    debug('fetch service description (%s)', serviceId);
+    this._logger('fetch service description (%s)', serviceId);
     fetch(service.SCPDURL, function(err, body) {
       if(err) return callback(err);
       var desc = parseServiceDescription(body);
@@ -135,7 +138,7 @@ DeviceClient.prototype.callAction = function(serviceId, actionName, params, call
       'SOAPACTION': '"' + service.serviceType + '#' + actionName + '"'
     };
 
-    debug('call action %s on service %s with params %j', actionName, serviceId, params);
+    this._logger('call action %s on service %s with params %j', actionName, serviceId, params);
 
     var req = http.request(options, function(req) {
       req.pipe(concat(function(buf) {
@@ -231,7 +234,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
         var timeout = parseTimeout(res.headers['timeout']);
 
         function renew() {
-          debug('renew subscription to %s', serviceId);
+          this._logger('renew subscription to %s', serviceId);
 
           var options = parseUrl(service.eventSubURL);
           options.method = 'SUBSCRIBE';
@@ -253,7 +256,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
             var timeout = parseTimeout(res.headers['timeout']);
 
             var renewTimeout = Math.max(timeout - 30, 30); // renew 30 seconds before expiration
-            debug('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
+            this._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
             var timer = setTimeout(renew, renewTimeout * 1000);
             self.subscriptions[serviceId].timer = timer;
           });
@@ -266,7 +269,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
         }
 
         var renewTimeout = Math.max(timeout - 30, 30); // renew 30 seconds before expiration
-        debug('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
+        this._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
         var timer = setTimeout(renew, renewTimeout * 1000);
 
         self.subscriptions[serviceId] = {
@@ -310,7 +313,7 @@ DeviceClient.prototype.unsubscribe = function(serviceId, listener) {
 
   if(subscription.listeners.length === 0) {
     // If there's no listener left for this service, unsubscribe from it
-    debug('unsubscribe from service %s', serviceId);
+    this._logger('unsubscribe from service %s', serviceId);
 
     var options = parseUrl(subscription.url);
 
@@ -352,7 +355,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
   var self = this;
 
   if(!this.server) {
-    debug('create eventing server');
+    this._logger('create eventing server');
     this.server = http.createServer(function(req, res) {
 
       req.pipe(concat(function(buf) {
@@ -360,7 +363,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
         var seq = req.headers['seq'];
         var events = parseEvents(buf);
 
-        debug('received events %s %d %j', sid, seq, events);
+        this._logger('received events %s %d %j', sid, seq, events);
 
         var keys = Object.keys(self.subscriptions);
         var sids = keys.map(function(key) {
@@ -369,7 +372,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
 
         var idx = sids.indexOf(sid);
         if(idx === -1) {
-          debug('WARNING unknown SID %s', sid);
+          this._logger('WARNING unknown SID %s', sid);
           // silently ignore unknown SIDs
           return;
         }
@@ -384,7 +387,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
             listener(e);
           });
         });
-        
+
         // be sure we quit response by sending back a 200 OK, otherwise well developed UPNP Devices will kick us out of their subscription list
         res.end();
 
@@ -413,7 +416,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
 
 DeviceClient.prototype.releaseEventingServer = function() {
   if(Object.keys(this.subscriptions).length === 0) {
-    debug('shutdown eventing server');
+    this._logger('shutdown eventing server');
     this.server.close();
     this.server = null;
     this.listening = false;
@@ -421,17 +424,17 @@ DeviceClient.prototype.releaseEventingServer = function() {
 };
 
 
-DeviceClient.prototype.getIfaceForUrl = function(_url) {  
+DeviceClient.prototype.getIfaceForUrl = function(_url) {
     var options = parseUrl(_url);
     var interfaces = os.networkInterfaces();
     var retIface = "";
-    
+
     Object.keys(interfaces).map(function (nic) {
-        for (var i = 0; i < interfaces[nic].length; i++) 
-        {            
+        for (var i = 0; i < interfaces[nic].length; i++)
+        {
             if(interfaces[nic][i].family.toLowerCase() == "ipv4")
             {
-                var base1 = ip.mask(interfaces[nic][i].address, interfaces[nic][i].netmask);    
+                var base1 = ip.mask(interfaces[nic][i].address, interfaces[nic][i].netmask);
                 var base2 = ip.mask(options.hostname, interfaces[nic][i].netmask); // TODO: maybe resolve IP here from hostname if hostname is not an ip
                 if (base1 == base2)
                     retIface = nic;
