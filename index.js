@@ -498,7 +498,8 @@ function parseDeviceDescription(xml, url) {
     'modelName',
     'modelNumber',
     'modelDescription',
-    'UDN'
+    'UDN',
+    'serialNumber'
   ]);
 
   var nodes = doc.findall('.//device/iconList/icon');
