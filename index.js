@@ -74,7 +74,7 @@ DeviceClient.prototype.getServiceDescription = function(serviceId, callback) {
       return callback(null, self.serviceDescriptions[serviceId]);
     }
 
-    this._logger('fetch service description (%s)', serviceId);
+    self._logger('fetch service description (%s)', serviceId);
     fetch(service.SCPDURL, function(err, body) {
       if(err) return callback(err);
       var desc = parseServiceDescription(body);
@@ -138,7 +138,7 @@ DeviceClient.prototype.callAction = function(serviceId, actionName, params, call
       'SOAPACTION': '"' + service.serviceType + '#' + actionName + '"'
     };
 
-    this._logger('call action %s on service %s with params %j', actionName, serviceId, params);
+    self._logger('call action %s on service %s with params %j', actionName, serviceId, params);
 
     var req = http.request(options, function(req) {
       req.pipe(concat(function(buf) {
@@ -234,7 +234,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
         var timeout = parseTimeout(res.headers['timeout']);
 
         function renew() {
-          this._logger('renew subscription to %s', serviceId);
+          self._logger('renew subscription to %s', serviceId);
 
           var options = parseUrl(service.eventSubURL);
           options.method = 'SUBSCRIBE';
@@ -256,7 +256,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
             var timeout = parseTimeout(res.headers['timeout']);
 
             var renewTimeout = Math.max(timeout - 30, 30); // renew 30 seconds before expiration
-            this._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
+            self._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
             var timer = setTimeout(renew, renewTimeout * 1000);
             self.subscriptions[serviceId].timer = timer;
           });
@@ -269,7 +269,7 @@ DeviceClient.prototype.subscribe = function(serviceId, listener) {
         }
 
         var renewTimeout = Math.max(timeout - 30, 30); // renew 30 seconds before expiration
-        this._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
+        self._logger('renewing subscription to %s in %d seconds', serviceId, renewTimeout);
         var timer = setTimeout(renew, renewTimeout * 1000);
 
         self.subscriptions[serviceId] = {
@@ -363,7 +363,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
         var seq = req.headers['seq'];
         var events = parseEvents(buf);
 
-        this._logger('received events %s %d %j', sid, seq, events);
+        self._logger('received events %s %d %j', sid, seq, events);
 
         var keys = Object.keys(self.subscriptions);
         var sids = keys.map(function(key) {
@@ -372,7 +372,7 @@ DeviceClient.prototype.ensureEventingServer = function(callback) {
 
         var idx = sids.indexOf(sid);
         if(idx === -1) {
-          this._logger('WARNING unknown SID %s', sid);
+          self._logger('WARNING unknown SID %s', sid);
           // silently ignore unknown SIDs
           return;
         }
